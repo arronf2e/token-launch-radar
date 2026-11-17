@@ -8,10 +8,12 @@ Launch Radar ranks the protocols in a sealed DefiLlama snapshot that still recor
 implied launch value, and gives each one a concrete farm plan. The value model is a peer-multiple
 model: a protocol's TVL is multiplied by the median market-cap/TVL of live protocols in its own
 category (shrunk toward the global median), then adjusted for 7-day TVL momentum, for how long it
-has run with no token, and for chain breadth. Wrapped, staked and bridged products of tokens that
-already trade are set aside, never ranked. The dashboard is a static page — a sortable, filterable
-board, a detail page per protocol with the model's arithmetic in full, and the live-token market
-shown for scale.
+has run with no token, and for chain breadth. Every multiple names the live peers behind it and
+grades its own evidence (deep, fair or thin), so a claim carried by one loud peer reads differently
+from one carried by a whole category. Wrapped, staked and bridged products of tokens that already
+trade are set aside, never ranked. The dashboard is a static page — a sortable, filterable board,
+a detail page per protocol with the model's arithmetic in full, and the live-token market shown
+for scale.
 
 ## Run it
 

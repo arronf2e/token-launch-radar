@@ -97,6 +97,21 @@ table.factors tr.total td { border-bottom: none; font-weight: 700; color: var(--
 ol.steps { margin: 0; padding-left: 22px; }
 ol.steps li { margin: 0 0 12px; }
 ol.steps li::marker { color: var(--teal); font-weight: 700; }
+td .sub { display: block; color: var(--faint); font-size: 11px; }
+.bars { margin: 2px 0 14px; display: grid; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 110px 1fr 90px; align-items: center; gap: 12px; font-size: 12.5px; color: var(--dim); }
+.bar-row b { text-align: right; color: var(--text); font-size: 13.5px; }
+.bar { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; height: 12px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: #3d5a68; }
+.bar i.teal { background: var(--teal); }
+.evidence { margin-top: 14px; border-top: 1px solid #16222c; padding-top: 12px; }
+.evidence h4 { margin: 0 0 8px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dim); }
+ul.peers { list-style: none; margin: 0 0 8px; padding: 0; }
+ul.peers li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #131e27; font-size: 13.5px; }
+ul.peers li span { color: var(--dim); }
+.evidence .none { color: var(--dim); font-size: 13.5px; margin: 0 0 8px; }
+.evidence .conf { color: var(--dim); font-size: 13px; margin: 6px 0 0; }
+.conf-deep { color: var(--green); } .conf-fair { color: var(--amber); } .conf-thin { color: var(--red); }
 
 .live-strip { margin-top: 30px; border-top: 1px solid var(--line); padding-top: 16px; }
 .live-strip h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin: 0 0 10px; }

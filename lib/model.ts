@@ -57,7 +57,7 @@ export interface Snapshot {
 }
 
 /** The model's version label, stated in the dashboard and in every data file it writes. */
-export const MODEL_VERSION = 'peer-multiple radar-2';
+export const MODEL_VERSION = 'peer-multiple radar-3';
 
 /** How many ranked candidates the board carries before the watchlist force-in pass. */
 export const BOARD_ROWS = 240;
@@ -112,11 +112,14 @@ function median(xs: number[]): number {
 export interface PeerMultiples {
   global: number;
   byCategory: Map<string, { multiple: number; peers: number }>;
+  /** The live peers behind each category, largest market cap first: the evidence, named. */
+  lists: Map<string, { name: string; multiple: number; mcap: number }[]>;
 }
 
 export function peerMultiples(snapshot: Snapshot): PeerMultiples {
   const ratios: number[] = [];
   const perCategory = new Map<string, number[]>();
+  const lists = new Map<string, { name: string; multiple: number; mcap: number }[]>();
   for (const p of snapshot.protocols) {
     if (!recordsToken(p) || p.mcap_usd === null || p.mcap_usd <= 0 || p.tvl_usd < 1_000_000) continue;
     const ratio = p.mcap_usd / p.tvl_usd;
@@ -126,6 +129,9 @@ export function peerMultiples(snapshot: Snapshot): PeerMultiples {
     const list = perCategory.get(key) ?? [];
     list.push(ratio);
     perCategory.set(key, list);
+    const named = lists.get(key) ?? [];
+    named.push({ name: p.name, multiple: Math.round(ratio * 1000) / 1000, mcap: p.mcap_usd });
+    lists.set(key, named);
   }
   const global = ratios.length > 0 ? clamp(median(ratios), 0.03, 2.5) : 0.25;
   const byCategory = new Map<string, { multiple: number; peers: number }>();
@@ -135,7 +141,8 @@ export function peerMultiples(snapshot: Snapshot): PeerMultiples {
     const shrunk = (list.length * median(list) + 8 * global) / (list.length + 8);
     byCategory.set(key, { multiple: clamp(shrunk, 0.03, 2.5), peers: list.length });
   }
-  return { global, byCategory };
+  for (const named of lists.values()) named.sort((a, b) => b.mcap - a.mcap || a.name.localeCompare(b.name));
+  return { global, byCategory, lists };
 }
 
 /** The multiple a candidate is valued with, and how many live peers stand behind it. */
@@ -150,6 +157,8 @@ export interface ScoredCandidate {
   age_days: number | null;
   multiple: number;
   peers: number;
+  peer_names: { name: string; multiple: number }[];
+  confidence: 'deep' | 'fair' | 'thin';
   momentum: number;
   maturity: number;
   breadth: number;
@@ -158,13 +167,16 @@ export interface ScoredCandidate {
 
 export function scoreCandidate(p: SnapshotProtocol, peers: PeerMultiples, asOf: string): ScoredCandidate {
   const { multiple, peers: peerCount } = multipleFor(peers, p.category);
+  const named = peers.lists.get(p.category ?? '(uncategorised)') ?? [];
+  const peerNames = named.slice(0, 3).map((n) => ({ name: n.name, multiple: n.multiple }));
+  const confidence = peerCount >= 5 ? 'deep' : peerCount >= 2 ? 'fair' : 'thin';
   const age = ageDays(p, asOf);
   const growth = clamp(p.change_7d ?? 0, -50, 100);
   const momentum = 1 + 0.35 * (growth / 100);
   const maturity = 0.75 + 0.5 * (Math.min(age ?? 365, 1095) / 1095);
   const breadth = 1 + 0.04 * Math.min(Math.max(p.chains.length - 1, 0), 5);
   const implied = Math.max(1, Math.round(p.tvl_usd * multiple * momentum * maturity * breadth));
-  return { protocol: p, age_days: age, multiple, peers: peerCount, momentum, maturity, breadth, implied_value_usd: implied };
+  return { protocol: p, age_days: age, multiple, peers: peerCount, peer_names: peerNames, confidence, momentum, maturity, breadth, implied_value_usd: implied };
 }
 
 /** Compact dollars for prose: $1.2B, $340M, $25K. */
@@ -285,15 +297,16 @@ function coreSteps(p: SnapshotProtocol, size: string, gas: string): [string, str
  * takes, built from the protocol's own category, chains and scale. Deterministic: the same
  * snapshot figures always write the same plan.
  */
-export function farmSteps(p: SnapshotProtocol, asOf: string): string[] {
+export function farmSteps(p: SnapshotProtocol, asOf: string, watchlisted = false): string[] {
   const size = sizeBand(p.tvl_usd);
   const primary = p.chains[0] ?? 'its main chain';
   const gas = gasProfile(primary);
   const age = ageDays(p, asOf);
   const seasoning = age !== null && age >= 730 ? ` It has run ${Math.floor(age / 365)} years with no token, so the farm is a patience trade, not a sprint.` : '';
+  const listed = watchlisted ? ' It is on the house watchlist (over $50M TVL, no token recorded).' : '';
   const [core1, core2] = coreSteps(p, size, gas);
   return [
-    `Set up one wallet for ${p.name} and fund it on ${primary} with ${size} of working capital; use this same wallet for every step so the protocol sees one consistent user.${seasoning} Cost: one funding transaction (${gas}). Time: 15 minutes.`,
+    `Set up one wallet for ${p.name} and fund it on ${primary} with ${size} of working capital; use this same wallet for every step so the protocol sees one consistent user.${seasoning}${listed} Cost: one funding transaction (${gas}). Time: 15 minutes.`,
     core1,
     core2,
     `Stay consistent for at least 8 weeks: repeat the core action weekly and keep a balance in place across weekly snapshots, since one-day spikes are the first thing points and season systems discount. Cost: ${gas} each week. Time: 20 minutes a week.`,
@@ -315,6 +328,8 @@ export interface BoardRow {
   implied_value_usd: number;
   multiple: number;
   peers: number;
+  peer_names: { name: string; multiple: number }[];
+  confidence: 'deep' | 'fair' | 'thin';
   momentum: number;
   maturity: number;
   breadth: number;
@@ -419,11 +434,13 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     implied_value_usd: s.implied_value_usd,
     multiple: Math.round(s.multiple * 1000) / 1000,
     peers: s.peers,
+    peer_names: s.peer_names,
+    confidence: s.confidence,
     momentum: Math.round(s.momentum * 1000) / 1000,
     maturity: Math.round(s.maturity * 1000) / 1000,
     breadth: Math.round(s.breadth * 1000) / 1000,
     watchlist: watchlist.has(s.protocol.slug),
-    farm_steps: farmSteps(s.protocol, snapshot.as_of),
+    farm_steps: farmSteps(s.protocol, snapshot.as_of, watchlist.has(s.protocol.slug)),
   }));
 
   const radar: RadarData = {

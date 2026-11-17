@@ -37,6 +37,11 @@
     for (var i = 0; i < DATA.rows.length; i++) if (DATA.rows[i].slug === slug) return DATA.rows[i];
     return null;
   }
+  function barW(x, r) {
+    // Log-scale bar width against the larger of this row's TVL and implied value.
+    var top = Math.max(r.tvl_usd, r.implied_value_usd, 1);
+    return Math.max(4, Math.round(100 * Math.log10(Math.max(x, 1)) / Math.log10(top)));
+  }
 
   // ---- masthead + live strip + footer: the same on every view ----
   (function chrome() {
@@ -130,7 +135,7 @@
         '<td class="n num">' + usd(r.tvl_usd) + '</td>' +
         '<td class="n num">' + pct(r.change_7d) + '</td>' +
         '<td class="n num">' + ageText(r.age_days) + '</td>' +
-        '<td class="n num">' + r.multiple.toFixed(2) + '×</td>' +
+        '<td class="n num">' + r.multiple.toFixed(2) + '×<span class="sub">' + r.peers + ' peer' + (r.peers === 1 ? '' : 's') + ' · ' + r.confidence + '</span></td>' +
         '<td class="n num val">' + usd(r.implied_value_usd) + '</td></tr>';
     });
     view.innerHTML = html + '</tbody></table>';
@@ -156,6 +161,8 @@
       '<div class="kv"><b>' + (r.change_7d == null ? '—' : (r.change_7d >= 0 ? '+' : '') + r.change_7d.toFixed(1) + '%') + '</b><span>TVL change, 7 days</span></div>' +
       '<div class="kv"><b>' + ageText(r.age_days) + '</b><span>running with no token' + (r.listed_at ? ' · since ' + r.listed_at : '') + '</span></div>' +
       '<div class="kv"><b>' + r.chains.length + '</b><span>chains live on</span></div></div>' +
+      '<div class="bars"><div class="bar-row"><span>TVL today</span><div class="bar"><i style="width:' + barW(r.tvl_usd, r) + '%"></i></div><b class="num">' + usd(r.tvl_usd) + '</b></div>' +
+      '<div class="bar-row"><span>Implied value</span><div class="bar"><i class="teal" style="width:' + barW(r.implied_value_usd, r) + '%"></i></div><b class="num">' + usd(r.implied_value_usd) + '</b></div></div>' +
       '<div class="cols"><section class="panel"><h3>How the value is built</h3><table class="factors">' +
       '<tr><td>TVL (the snapshot\u2019s figure)</td><td class="n num">' + usd(r.tvl_usd) + '</td></tr>' +
       '<tr><td>Peer multiple — median mcap/TVL of ' + r.peers + ' live ' + esc(r.category || '') + ' protocol' + (r.peers === 1 ? '' : 's') + ', shrunk to the global median</td><td class="n num">× ' + r.multiple.toFixed(3) + '</td></tr>' +
@@ -164,7 +171,20 @@
       '<tr><td>Maturity — years running with no token, capped at three</td><td class="n num">× ' + r.maturity.toFixed(3) + '</td></tr>' +
       '<tr><td>Breadth — one plus 0.04 per extra chain, capped at five</td><td class="n num">× ' + r.breadth.toFixed(3) + '</td></tr>' +
       '<tr class="total"><td>Implied value if it launched at this record</td><td class="n num">' + usd(r.implied_value_usd) + '</td></tr>' +
-      '</table></section>' +
+      '</table>' +
+      '<div class="evidence"><h4>The live peers behind this multiple</h4>' +
+      (r.peer_names.length
+        ? '<ul class="peers">' + r.peer_names.map(function (pn) {
+            return '<li><b>' + esc(pn.name) + '</b><span class="num">' + pn.multiple.toFixed(2) + '× TVL</span></li>';
+          }).join('') + '</ul>'
+        : '<p class="none">No live protocol in this category clears the snapshot\u2019s $1M TVL evidence floor, so the global median carries the claim on its own.</p>') +
+      '<p class="conf">Evidence: <b class="conf-' + r.confidence + '">' + r.confidence + '</b> — ' +
+      (r.confidence === 'deep'
+        ? r.peers + ' live peers trade in this category; the median is the category\u2019s own market speaking.'
+        : r.confidence === 'fair'
+          ? r.peers + ' live peers trade in this category; shrinkage still lends the median some of the global market\u2019s weight.'
+          : 'at most one live peer stands behind this category, so shrinkage pulls the multiple toward the global median and the claim should be read with that caution.') +
+      '</p></div></section>' +
       '<section class="panel"><h3>Farm plan — what to do before a token exists</h3><ol class="steps">' +
       r.farm_steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') +
       '</ol></section></div>';
